@@ -1,7 +1,8 @@
 // =========================================================
-// FakeMail Neo·AI - Application Core
+// FakeMail Neo·AI - Application Core & Live In-App Mailbox
 // =========================================================
 
+// ---- 15 External Providers Data ----
 const providers = [
   {
     id: '22do',
@@ -140,43 +141,7 @@ const providers = [
   }
 ];
 
-// ---- DOM Elements ----
-const providersGrid = document.getElementById('providersGrid');
-const searchInput = document.getElementById('searchInput');
-const searchCount = document.getElementById('searchCount');
-const filterPills = document.querySelectorAll('.filter-pill');
-
-// AI Studio elements
-const tabButtons = document.querySelectorAll('.tab-btn');
-const tabContents = document.querySelectorAll('.tab-content');
-const burnerEmail = document.getElementById('burnerEmail');
-const domainSelect = document.getElementById('domainSelect');
-const btnGenBurner = document.getElementById('btnGenBurner');
-const btnCopyBurner = document.getElementById('btnCopyBurner');
-
-const gmailBaseInput = document.getElementById('gmailBaseInput');
-const btnGenDotTrick = document.getElementById('btnGenDotTrick');
-const aliasesContainer = document.getElementById('aliasesContainer');
-
-const personaName = document.getElementById('personaName');
-const personaUser = document.getElementById('personaUser');
-const personaMail = document.getElementById('personaMail');
-const personaPass = document.getElementById('personaPass');
-const btnGenPersona = document.getElementById('btnGenPersona');
-const btnCopyPersona = document.getElementById('btnCopyPersona');
-
-// Modal elements
-const modalOverlay = document.getElementById('modalOverlay');
-const modalClose = document.getElementById('modalClose');
-const modalEmoji = document.getElementById('modalEmoji');
-const modalTitle = document.getElementById('modalTitle');
-const modalTag = document.getElementById('modalTag');
-const modalUrl = document.getElementById('modalUrl');
-const modalDesc = document.getElementById('modalDesc');
-const modalLaunch = document.getElementById('modalLaunch');
-const modalCopyBtn = document.getElementById('modalCopyBtn');
-
-// Toast
+// ---- Toast & Utility Functions ----
 const toast = document.getElementById('toast');
 const toastMsg = document.getElementById('toastMsg');
 let toastTimeout;
@@ -187,7 +152,7 @@ function showToast(message) {
   clearTimeout(toastTimeout);
   toastTimeout = setTimeout(() => {
     toast.classList.remove('show');
-  }, 2400);
+  }, 2600);
 }
 
 function copyToClipboard(text, customMessage = 'Copied to clipboard!') {
@@ -204,7 +169,413 @@ function copyToClipboard(text, customMessage = 'Copied to clipboard!') {
   }
 }
 
-// ---- Render Providers ----
+// =========================================================
+// Real In-App Live Mailbox Engine (Powered by Mail.tm API)
+// =========================================================
+const API_BASE = 'https://api.mail.tm';
+
+let currentAccount = {
+  address: '',
+  password: '',
+  token: '',
+  id: ''
+};
+
+let messages = [];
+let pollCountdown = 5;
+let pollInterval = null;
+let isPolling = false;
+
+// DOM Elements for Live Inbox
+const liveEmailText = document.getElementById('liveEmailText');
+const btnCopyLive = document.getElementById('btnCopyLive');
+const btnNewLive = document.getElementById('btnNewLive');
+const btnRefreshLive = document.getElementById('btnRefreshLive');
+const pollTimer = document.getElementById('pollTimer');
+const syncStatus = document.getElementById('syncStatus');
+const messagesList = document.getElementById('messagesList');
+const msgCountBadge = document.getElementById('msgCountBadge');
+
+// Message Reader Modal Elements
+const readModalOverlay = document.getElementById('readModalOverlay');
+const readModalClose = document.getElementById('readModalClose');
+const readerSubject = document.getElementById('readerSubject');
+const readerDate = document.getElementById('readerDate');
+const readerFrom = document.getElementById('readerFrom');
+const readerTo = document.getElementById('readerTo');
+const readerBody = document.getElementById('readerBody');
+const otpBanner = document.getElementById('otpBanner');
+const otpCode = document.getElementById('otpCode');
+const btnCopyOtp = document.getElementById('btnCopyOtp');
+const btnDeleteMsg = document.getElementById('btnDeleteMsg');
+let currentViewingMsgId = null;
+
+// Initialize Live Mailbox
+async function initLiveMailbox() {
+  const saved = localStorage.getItem('fakemail_account');
+  if (saved) {
+    try {
+      currentAccount = JSON.parse(saved);
+      // Verify token
+      const res = await fetch(`${API_BASE}/me`, {
+        headers: { 'Authorization': `Bearer ${currentAccount.token}` }
+      });
+      if (res.ok) {
+        liveEmailText.textContent = currentAccount.address;
+        startPolling();
+        fetchMessages();
+        return;
+      }
+    } catch (e) {
+      console.warn('Saved account expired, generating new one...', e);
+    }
+  }
+  await createNewLiveMailbox();
+}
+
+async function createNewLiveMailbox() {
+  try {
+    liveEmailText.textContent = 'Contacting mail server...';
+    syncStatus.textContent = 'Fetching domain...';
+
+    // 1. Get available domains
+    const domainRes = await fetch(`${API_BASE}/domains`);
+    if (!domainRes.ok) throw new Error('Could not fetch mail domains');
+    const domainData = await domainRes.json();
+    const domain = domainData['hydra:member']?.[0]?.domain || 'fldubai.com';
+
+    // 2. Generate random credentials
+    const user = 'user_' + Math.random().toString(36).substring(2, 10);
+    const address = `${user}@${domain}`;
+    const password = 'Pwd_' + Math.random().toString(36).substring(2, 12) + '!';
+
+    // 3. Create account
+    const accRes = await fetch(`${API_BASE}/accounts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address, password })
+    });
+    if (!accRes.ok) throw new Error('Failed to create mail account');
+    const accData = await accRes.json();
+
+    // 4. Get auth token
+    const tokenRes = await fetch(`${API_BASE}/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address, password })
+    });
+    if (!tokenRes.ok) throw new Error('Failed to retrieve mail token');
+    const tokenData = await tokenRes.json();
+
+    currentAccount = {
+      address,
+      password,
+      token: tokenData.token,
+      id: accData.id
+    };
+
+    localStorage.setItem('fakemail_account', JSON.stringify(currentAccount));
+    liveEmailText.textContent = address;
+    showToast('New Live Mailbox Ready!');
+    messages = [];
+    renderMessages();
+    startPolling();
+    fetchMessages();
+  } catch (err) {
+    console.error('Error creating live mailbox:', err);
+    liveEmailText.textContent = 'Service connecting... Click "New Address" to retry';
+    syncStatus.textContent = 'Server busy, click refresh to retry';
+  }
+}
+
+// Polling Loop
+function startPolling() {
+  if (pollInterval) clearInterval(pollInterval);
+  pollCountdown = 5;
+
+  pollInterval = setInterval(async () => {
+    pollCountdown--;
+    if (pollCountdown <= 0) {
+      pollCountdown = 5;
+      await fetchMessages();
+    }
+    pollTimer.textContent = `Auto-refresh: ${pollCountdown}s`;
+  }, 1000);
+}
+
+async function fetchMessages() {
+  if (!currentAccount.token || isPolling) return;
+  isPolling = true;
+  syncStatus.textContent = 'Checking inbox...';
+
+  try {
+    const res = await fetch(`${API_BASE}/messages`, {
+      headers: { 'Authorization': `Bearer ${currentAccount.token}` }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const newMessages = data['hydra:member'] || [];
+
+      // Check if new email arrived
+      if (newMessages.length > messages.length) {
+        showToast(`🎉 New email received! (${newMessages.length} total)`);
+      }
+
+      messages = newMessages;
+      msgCountBadge.textContent = messages.length;
+      renderMessages();
+      syncStatus.textContent = `Active · Synced ${new Date().toLocaleTimeString()}`;
+    }
+  } catch (e) {
+    syncStatus.textContent = 'Network check failed, retrying...';
+  } finally {
+    isPolling = false;
+  }
+}
+
+// Render Messages List
+function renderMessages() {
+  if (messages.length === 0) {
+    messagesList.innerHTML = `
+      <div class="empty-inbox">
+        <div class="radar-spinner">
+          <div class="radar-pulse"></div>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+        </div>
+        <p class="empty-title">Waiting for incoming emails...</p>
+        <p class="empty-desc">Send a confirmation email or sign-up link to <strong>${currentAccount.address || 'your address'}</strong>. It will appear here automatically!</p>
+      </div>
+    `;
+    return;
+  }
+
+  messagesList.innerHTML = '';
+  messages.forEach(msg => {
+    const item = document.createElement('div');
+    item.className = 'message-item';
+    const dateFormatted = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const fromName = msg.from.name || msg.from.address;
+
+    item.innerHTML = `
+      <div class="message-left">
+        <div class="message-from">${fromName}</div>
+        <div class="message-subject">${msg.subject || '(No Subject)'}</div>
+        <div class="message-intro">${msg.intro || 'Click to view full message body...'}</div>
+      </div>
+      <div class="message-right">
+        <span class="message-time">${dateFormatted}</span>
+        <button class="read-btn-pill">Read ↗</button>
+      </div>
+    `;
+
+    item.addEventListener('click', () => openMessage(msg.id));
+    messagesList.appendChild(item);
+  });
+}
+
+// Open Message Modal & Fetch Full Content
+async function openMessage(msgId) {
+  currentViewingMsgId = msgId;
+  readModalOverlay.classList.add('active');
+  readerBody.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Decrypting message content...</div>';
+  otpBanner.style.display = 'none';
+
+  try {
+    const res = await fetch(`${API_BASE}/messages/${msgId}`, {
+      headers: { 'Authorization': `Bearer ${currentAccount.token}` }
+    });
+
+    if (!res.ok) throw new Error('Failed to load message');
+    const msg = await res.json();
+
+    readerSubject.textContent = msg.subject || '(No Subject)';
+    readerDate.textContent = new Date(msg.createdAt).toLocaleString();
+    readerFrom.textContent = `${msg.from.name ? msg.from.name + ' ' : ''}<${msg.from.address}>`;
+    readerTo.textContent = msg.to.map(t => t.address).join(', ');
+
+    // Extract OTP / verification code
+    const fullText = (msg.text || '') + ' ' + (msg.subject || '');
+    const otpMatch = fullText.match(/\b(?:\d{4,8}|[A-Z0-9]{5,8})\b/) || fullText.match(/(?:code|otp|pin|verify|verification)[:\s]+([0-9]{4,8})/i);
+
+    if (otpMatch) {
+      const codeFound = otpMatch[1] || otpMatch[0];
+      // Exclude simple years like 2026 if false positive
+      if (codeFound && codeFound !== '2026' && codeFound.length >= 4) {
+        otpCode.textContent = codeFound;
+        otpBanner.style.display = 'flex';
+      }
+    }
+
+    // Render HTML safely inside iframe or text
+    if (msg.html && msg.html.length > 0) {
+      const iframe = document.createElement('iframe');
+      readerBody.innerHTML = '';
+      readerBody.appendChild(iframe);
+      iframe.contentWindow.document.open();
+      iframe.contentWindow.document.write(`
+        <!DOCTYPE html><html><head><style>body { font-family: sans-serif; font-size: 14px; color: #111; line-height: 1.5; padding: 12px; margin: 0; }</style></head><body>${msg.html[0]}</body></html>
+      `);
+      iframe.contentWindow.document.close();
+    } else {
+      readerBody.innerHTML = `<pre style="white-space: pre-wrap; font-family: sans-serif; font-size: 14px; margin: 0;">${escapeHtml(msg.text || 'No text content.')}</pre>`;
+    }
+  } catch (e) {
+    readerBody.innerHTML = '<div style="color: red; padding: 16px;">Failed to load message. Please try again.</div>';
+  }
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Reader actions
+btnCopyOtp.addEventListener('click', () => {
+  copyToClipboard(otpCode.textContent, 'OTP Code copied!');
+});
+
+btnDeleteMsg.addEventListener('click', async () => {
+  if (!currentViewingMsgId || !currentAccount.token) return;
+  try {
+    await fetch(`${API_BASE}/messages/${currentViewingMsgId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${currentAccount.token}` }
+    });
+    showToast('Message deleted.');
+    readModalOverlay.classList.remove('active');
+    fetchMessages();
+  } catch (e) {
+    showToast('Could not delete message.');
+  }
+});
+
+readModalClose.addEventListener('click', () => {
+  readModalOverlay.classList.remove('active');
+});
+
+// Live Inbox Buttons
+btnCopyLive.addEventListener('click', () => {
+  if (currentAccount.address) {
+    copyToClipboard(currentAccount.address, 'Live email address copied!');
+  }
+});
+
+btnNewLive.addEventListener('click', () => {
+  createNewLiveMailbox();
+});
+
+btnRefreshLive.addEventListener('click', () => {
+  btnRefreshLive.style.transform = 'rotate(360deg)';
+  setTimeout(() => { btnRefreshLive.style.transform = ''; }, 400);
+  fetchMessages();
+  showToast('Checked for new emails!');
+});
+
+// =========================================================
+// Section 2: AI Aliases & Dot-Trick Generator
+// =========================================================
+const tabButtons = document.querySelectorAll('.tab-btn');
+const tabContents = document.querySelectorAll('.tab-content');
+const gmailBaseInput = document.getElementById('gmailBaseInput');
+const btnGenDotTrick = document.getElementById('btnGenDotTrick');
+const aliasesContainer = document.getElementById('aliasesContainer');
+
+const personaName = document.getElementById('personaName');
+const personaUser = document.getElementById('personaUser');
+const personaMail = document.getElementById('personaMail');
+const personaPass = document.getElementById('personaPass');
+const btnGenPersona = document.getElementById('btnGenPersona');
+const btnCopyPersona = document.getElementById('btnCopyPersona');
+
+tabButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    tabButtons.forEach(b => b.classList.remove('active'));
+    tabContents.forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+  });
+});
+
+function generateDotTrickAliases(base) {
+  const clean = base.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'alexhunter';
+  const aliases = [];
+
+  if (clean.length > 2) {
+    aliases.push(`${clean[0]}.${clean.slice(1)}@gmail.com`);
+    aliases.push(`${clean.slice(0, 2)}.${clean.slice(2)}@gmail.com`);
+    if (clean.length > 4) {
+      aliases.push(`${clean.slice(0, 2)}.${clean.slice(2, 4)}.${clean.slice(4)}@gmail.com`);
+    }
+  }
+
+  aliases.push(`${clean}+verify@gmail.com`);
+  aliases.push(`${clean}+temp${Math.floor(Math.random() * 99)}@gmail.com`);
+  aliases.push(`${clean}+auth@gmail.com`);
+  aliases.push(`${clean}+bypass@gmail.com`);
+  aliases.push(`${clean}@googlemail.com`);
+
+  aliasesContainer.innerHTML = '';
+  aliases.forEach(alias => {
+    const chip = document.createElement('div');
+    chip.className = 'alias-chip';
+    chip.innerHTML = `
+      <span>${alias}</span>
+      <span style="color: var(--accent-cyan); font-size: 11px;">Copy 📋</span>
+    `;
+    chip.addEventListener('click', () => copyToClipboard(alias, `Copied ${alias}!`));
+    aliasesContainer.appendChild(chip);
+  });
+}
+
+btnGenDotTrick.addEventListener('click', () => {
+  const val = gmailBaseInput.value.trim() || 'alexhunter';
+  generateDotTrickAliases(val);
+});
+
+const firstNames = ['Alexander', 'Elena', 'Lucas', 'Maya', 'Julian', 'Sofia', 'Dmitri', 'Aria', 'Kaelen', 'Zara'];
+const lastNames = ['Vance', 'Sterling', 'Mercer', 'Novak', 'Sinclair', 'Cross', 'Winters', 'Frost', 'Kovacs'];
+
+function generatePersona() {
+  const first = firstNames[Math.floor(Math.random() * firstNames.length)];
+  const last = lastNames[Math.floor(Math.random() * lastNames.length)];
+  const user = `${first.toLowerCase()}.${last.toLowerCase()}${Math.floor(Math.random() * 99)}`;
+  const mail = `${user}@ghostmail.org`;
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*';
+  let pass = '';
+  for (let i = 0; i < 14; i++) {
+    pass += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+
+  personaName.textContent = `${first} ${last}`;
+  personaUser.textContent = user;
+  personaMail.textContent = mail;
+  personaPass.textContent = pass;
+}
+
+btnGenPersona.addEventListener('click', generatePersona);
+btnCopyPersona.addEventListener('click', () => {
+  const data = `Name: ${personaName.textContent}\nUsername: ${personaUser.textContent}\nEmail: ${personaMail.textContent}\nPassword: ${personaPass.textContent}`;
+  copyToClipboard(data, 'Persona details copied to clipboard!');
+});
+
+// =========================================================
+// Section 3: 15 Verified External Mail Web Services
+// =========================================================
+const providersGrid = document.getElementById('providersGrid');
+const searchInput = document.getElementById('searchInput');
+const searchCount = document.getElementById('searchCount');
+const filterPills = document.querySelectorAll('.filter-pill');
+
+const modalOverlay = document.getElementById('modalOverlay');
+const modalClose = document.getElementById('modalClose');
+const modalEmoji = document.getElementById('modalEmoji');
+const modalTitle = document.getElementById('modalTitle');
+const modalTag = document.getElementById('modalTag');
+const modalUrl = document.getElementById('modalUrl');
+const modalDesc = document.getElementById('modalDesc');
+const modalLaunch = document.getElementById('modalLaunch');
+const modalCopyBtn = document.getElementById('modalCopyBtn');
+
 let activeFilter = 'all';
 
 function renderProviders() {
@@ -257,19 +628,16 @@ function renderProviders() {
       </div>
     `;
 
-    // Click on details
     const detailsBtn = card.querySelector('[data-action="details"]');
-    detailsBtn.addEventListener('click', () => openModal(p));
-
+    detailsBtn.addEventListener('click', () => openExternalModal(p));
     providersGrid.appendChild(card);
   });
 }
 
-// Modal logic
-let currentActiveProvider = null;
+let currentExternalProvider = null;
 
-function openModal(provider) {
-  currentActiveProvider = provider;
+function openExternalModal(provider) {
+  currentExternalProvider = provider;
   modalEmoji.textContent = provider.emoji;
   modalTitle.textContent = provider.name;
   modalTag.textContent = provider.tag;
@@ -279,26 +647,11 @@ function openModal(provider) {
   modalOverlay.classList.add('active');
 }
 
-function closeModal() {
-  modalOverlay.classList.remove('active');
-  currentActiveProvider = null;
-}
-
-modalClose.addEventListener('click', closeModal);
-modalOverlay.addEventListener('click', (e) => {
-  if (e.target === modalOverlay) closeModal();
-});
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeModal();
-});
-
+modalClose.addEventListener('click', () => modalOverlay.classList.remove('active'));
 modalCopyBtn.addEventListener('click', () => {
-  if (currentActiveProvider) {
-    copyToClipboard(currentActiveProvider.url, 'Provider URL copied!');
-  }
+  if (currentExternalProvider) copyToClipboard(currentExternalProvider.url, 'Provider URL copied!');
 });
 
-// Filters & Search
 filterPills.forEach(pill => {
   pill.addEventListener('click', () => {
     filterPills.forEach(p => p.classList.remove('active'));
@@ -310,115 +663,23 @@ filterPills.forEach(pill => {
 
 searchInput.addEventListener('input', renderProviders);
 
-// Tab switching
-tabButtons.forEach(btn => {
-  btn.addEventListener('click', () => {
-    tabButtons.forEach(b => b.classList.remove('active'));
-    tabContents.forEach(c => c.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+// Global modal overlays closing
+[modalOverlay, readModalOverlay].forEach(overlay => {
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.classList.remove('active');
   });
 });
 
-// AI Synthetic Generator Logic
-const adjectives = ['cyber', 'neon', 'phantom', 'shadow', 'quantum', 'hyper', 'sonic', 'void', 'echo', 'flux', 'vortex', 'alpha', 'nova', 'apex'];
-const nouns = ['pulse', 'runner', 'hawk', 'agent', 'spark', 'matrix', 'stream', 'pilot', 'cipher', 'nexus', 'ghost', 'specter', 'drifter'];
-const firstNames = ['Alexander', 'Elena', 'Lucas', 'Maya', 'Julian', 'Sofia', 'Dmitri', 'Aria', 'Kaelen', 'Zara'];
-const lastNames = ['Vance', 'Sterling', 'Mercer', 'Novak', 'Sinclair', 'Cross', 'Winters', 'Frost', 'Kovacs'];
-
-function getRandomItem(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-function generateRandomNumber(len = 4) {
-  return Math.floor(Math.random() * Math.pow(10, len)).toString().padStart(len, '0');
-}
-
-// 1. Burner Generator
-function generateBurner() {
-  const adj = getRandomItem(adjectives);
-  const noun = getRandomItem(nouns);
-  const num = generateRandomNumber(3);
-  const domain = domainSelect.value;
-  const email = `${adj}.${noun}${num}${domain}`;
-  burnerEmail.textContent = email;
-}
-
-btnGenBurner.addEventListener('click', generateBurner);
-btnCopyBurner.addEventListener('click', () => {
-  const email = burnerEmail.textContent;
-  if (!email || email.includes('...')) {
-    generateBurner();
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    modalOverlay.classList.remove('active');
+    readModalOverlay.classList.remove('active');
   }
-  copyToClipboard(burnerEmail.textContent, 'Burner email copied!');
 });
 
-// 2. Gmail Dot-Trick Generator
-function generateDotTrickAliases(base) {
-  const clean = base.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'alexhunter';
-  const aliases = [];
-
-  // Dot combinations
-  if (clean.length > 2) {
-    aliases.push(`${clean[0]}.${clean.slice(1)}@gmail.com`);
-    aliases.push(`${clean.slice(0, 2)}.${clean.slice(2)}@gmail.com`);
-    if (clean.length > 4) {
-      aliases.push(`${clean.slice(0, 2)}.${clean.slice(2, 4)}.${clean.slice(4)}@gmail.com`);
-    }
-  }
-
-  // Plus tag variations
-  aliases.push(`${clean}+verify@gmail.com`);
-  aliases.push(`${clean}+temp${generateRandomNumber(2)}@gmail.com`);
-  aliases.push(`${clean}+auth@gmail.com`);
-  aliases.push(`${clean}+bypass@gmail.com`);
-  aliases.push(`${clean}@googlemail.com`);
-
-  aliasesContainer.innerHTML = '';
-  aliases.forEach(alias => {
-    const chip = document.createElement('div');
-    chip.className = 'alias-chip';
-    chip.innerHTML = `
-      <span>${alias}</span>
-      <span style="color: var(--accent-cyan); font-size: 11px;">Copy 📋</span>
-    `;
-    chip.addEventListener('click', () => copyToClipboard(alias, `Copied ${alias}!`));
-    aliasesContainer.appendChild(chip);
-  });
-}
-
-btnGenDotTrick.addEventListener('click', () => {
-  const val = gmailBaseInput.value.trim() || 'alexhunter';
-  generateDotTrickAliases(val);
-});
-
-// 3. Full Persona Generator
-function generatePersona() {
-  const first = getRandomItem(firstNames);
-  const last = getRandomItem(lastNames);
-  const user = `${first.toLowerCase()}.${last.toLowerCase()}${generateRandomNumber(2)}`;
-  const mail = `${user}@dispostar.net`;
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*';
-  let pass = '';
-  for (let i = 0; i < 14; i++) {
-    pass += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-
-  personaName.textContent = `${first} ${last}`;
-  personaUser.textContent = user;
-  personaMail.textContent = mail;
-  personaPass.textContent = pass;
-}
-
-btnGenPersona.addEventListener('click', generatePersona);
-btnCopyPersona.addEventListener('click', () => {
-  const data = `Name: ${personaName.textContent}\nUsername: ${personaUser.textContent}\nEmail: ${personaMail.textContent}\nPassword: ${personaPass.textContent}`;
-  copyToClipboard(data, 'Persona details copied to clipboard!');
-});
-
-// Initialize
+// ---- Boot Everything ----
+initLiveMailbox();
 renderProviders();
-generateBurner();
 generateDotTrickAliases('alexhunter');
 generatePersona();
 document.getElementById('yearSpan').textContent = new Date().getFullYear();

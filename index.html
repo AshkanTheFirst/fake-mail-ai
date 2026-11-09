@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FakeMail AI · Next-Gen Temporary Email Hub</title>
-  <meta name="description" content="AI-powered temporary & fake disposable email generator with direct access to 15 top disposable mail providers." />
+  <title>FakeMail AI · Next-Gen Temporary Email Hub & Live Inbox</title>
+  <meta name="description" content="AI-powered temporary disposable email generator with a live real in-app mailbox and direct access to 15 top temp mail providers." />
   <link rel="stylesheet" href="styles.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -12,7 +12,7 @@
 </head>
 <body>
 
-  <!-- Ambient visual effects -->
+  <!-- Ambient visual background effects -->
   <div class="bg-grid"></div>
   <div class="bg-glow bg-glow-1"></div>
   <div class="bg-glow bg-glow-2"></div>
@@ -32,69 +32,99 @@
             <span>FAKEMAIL</span>
             <span class="ai-chip">NEO·AI</span>
           </div>
-          <p class="brand-subtitle">Next-Generation Temporary & Disposable Email Platform</p>
+          <p class="brand-subtitle">Real In-App Disposable Inbox & 15 Mail Engines</p>
         </div>
       </div>
       <div class="header-stats">
-        <div class="stat-pill">
-          <span class="pulse-dot"></span>
-          <span>15 Active Providers</span>
-        </div>
         <div class="stat-pill online-pill">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-          <span>Cloud Active</span>
+          <span class="pulse-dot"></span>
+          <span id="systemStatus">Live Mailbox: Ready</span>
+        </div>
+        <div class="stat-pill">
+          <span>15 Providers Active</span>
         </div>
       </div>
     </div>
   </header>
 
-  <!-- Main Container -->
+  <!-- Main Content -->
   <main class="main-container">
 
-    <!-- Interactive AI Mail Studio -->
+    <!-- Section 1: Live Real In-App Mailbox -->
+    <section class="live-inbox-section">
+      <div class="inbox-card-glow">
+        <div class="inbox-header">
+          <div class="inbox-badge-row">
+            <span class="live-tag">● REAL LIVE INBOX</span>
+            <span class="inbox-auto-timer" id="pollTimer">Auto-refresh: 5s</span>
+          </div>
+          <h2 class="inbox-title">Instant Working Disposable Address</h2>
+          <p class="inbox-sub">This address is active and can receive real emails, OTPs, and verification links right now.</p>
+        </div>
+
+        <!-- Address Bar -->
+        <div class="address-box-wrapper">
+          <div class="address-box">
+            <span class="address-label">Active Inbox:</span>
+            <div class="address-text" id="liveEmailText">Generating real mailbox...</div>
+          </div>
+          <div class="address-actions">
+            <button class="btn btn-gradient" id="btnCopyLive">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copy Email
+            </button>
+            <button class="btn btn-outline" id="btnNewLive" title="Generate another email">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+              New Address
+            </button>
+            <button class="btn btn-outline btn-icon-only" id="btnRefreshLive" title="Check for new messages now">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Incoming Messages Panel -->
+        <div class="messages-container">
+          <div class="messages-header">
+            <div class="msg-count-group">
+              <span class="msg-title">Incoming Messages</span>
+              <span class="msg-count-badge" id="msgCountBadge">0</span>
+            </div>
+            <span class="sync-indicator" id="syncStatus">Listening for incoming emails...</span>
+          </div>
+
+          <div class="messages-list" id="messagesList">
+            <!-- Empty state -->
+            <div class="empty-inbox">
+              <div class="radar-spinner">
+                <div class="radar-pulse"></div>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+              </div>
+              <p class="empty-title">Waiting for incoming emails...</p>
+              <p class="empty-desc">Send a confirmation email or sign-up link to your address above. It will appear here within seconds!</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Section 2: AI Synthetic Mail Engine & Dot-Trick Tools -->
     <section class="ai-studio">
       <div class="studio-header">
         <div class="studio-title-group">
-          <span class="studio-badge">⚡ INSTANT GENERATOR</span>
-          <h2>AI Synthetic Mail Engine</h2>
-          <p>Generate one-click fake identities, burner emails, and Gmail dot-trick variations.</p>
+          <span class="studio-badge">⚡ ADVANCED SYNTHETIC TOOLS</span>
+          <h2>AI Aliases & Persona Generator</h2>
+          <p>Generate Gmail dot-trick variations and full synthetic registration identities.</p>
         </div>
         <div class="studio-tabs">
-          <button class="tab-btn active" data-tab="burner">Burner Email</button>
-          <button class="tab-btn" data-tab="dottrick">Gmail Dot-Trick</button>
+          <button class="tab-btn active" data-tab="dottrick">Gmail Dot-Trick</button>
           <button class="tab-btn" data-tab="persona">Full Persona</button>
         </div>
       </div>
 
-      <!-- Tab: Burner -->
-      <div class="tab-content active" id="tab-burner">
-        <div class="generator-box">
-          <div class="email-display">
-            <span class="display-label">Generated Disposable Address:</span>
-            <div class="display-value" id="burnerEmail">click generate to create...</div>
-          </div>
-          <div class="gen-controls">
-            <select id="domainSelect" class="styled-select">
-              <option value="@tempmail.lol">@tempmail.lol</option>
-              <option value="@inboxclean.org">@inboxclean.org</option>
-              <option value="@ghostbox.me">@ghostbox.me</option>
-              <option value="@dispostar.net">@dispostar.net</option>
-              <option value="@quickinbox.io">@quickinbox.io</option>
-            </select>
-            <button class="btn btn-gradient" id="btnGenBurner">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-              Generate New
-            </button>
-            <button class="btn btn-outline" id="btnCopyBurner">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              Copy
-            </button>
-          </div>
-        </div>
-      </div>
-
       <!-- Tab: Gmail Dot-Trick -->
-      <div class="tab-content" id="tab-dottrick">
+      <div class="tab-content active" id="tab-dottrick">
         <div class="generator-box">
           <div class="dottrick-input-row">
             <input type="text" id="gmailBaseInput" placeholder="Enter base username (e.g. alexhunter)" class="styled-input" />
@@ -127,7 +157,7 @@
       </div>
     </section>
 
-    <!-- Provider Section Header & Filters -->
+    <!-- Section 3: 15 Verified External Mail Web Services -->
     <section class="providers-section">
       <div class="section-top">
         <div>
@@ -157,7 +187,43 @@
 
   </main>
 
-  <!-- Provider Detail Modal -->
+  <!-- Live Message Reader Modal -->
+  <div class="modal-overlay" id="readModalOverlay">
+    <div class="modal-card modal-reader">
+      <button class="modal-close-btn" id="readModalClose">✕</button>
+      <div class="reader-meta">
+        <div class="reader-header-top">
+          <span class="reader-badge">LIVE MESSAGE</span>
+          <span class="reader-date" id="readerDate">-</span>
+        </div>
+        <h3 class="reader-subject" id="readerSubject">Subject</h3>
+        <div class="reader-addresses">
+          <div><span class="k">From:</span> <span class="v" id="readerFrom">-</span></div>
+          <div><span class="k">To:</span> <span class="v" id="readerTo">-</span></div>
+        </div>
+      </div>
+
+      <!-- Highlighted OTP Banner (auto-extracted) -->
+      <div class="otp-banner" id="otpBanner" style="display: none;">
+        <div class="otp-banner-left">
+          <span class="otp-label">DETECTED VERIFICATION CODE / OTP:</span>
+          <span class="otp-code" id="otpCode">123456</span>
+        </div>
+        <button class="btn btn-gradient btn-sm" id="btnCopyOtp">Copy Code</button>
+      </div>
+
+      <!-- Body Container -->
+      <div class="reader-body" id="readerBody">
+        <div class="loading-spinner">Loading message content...</div>
+      </div>
+
+      <div class="modal-actions" style="margin-top: 20px;">
+        <button class="btn btn-outline" id="btnDeleteMsg">Delete Message</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- External Provider Detail Modal -->
   <div class="modal-overlay" id="modalOverlay">
     <div class="modal-card">
       <button class="modal-close-btn" id="modalClose">✕</button>
@@ -201,7 +267,7 @@
   <footer class="footer">
     <div class="footer-content">
       <div class="footer-left">
-        <strong>FAKEMAIL NEO·AI</strong> · Privacy Engineering & Synthetic Disposable Inboxes
+        <strong>FAKEMAIL NEO·AI</strong> · Privacy Engineering & Real-Time In-App Disposable Inboxes
       </div>
       <div class="footer-right">
         <span>Cloud Edition</span> · <span id="yearSpan">2026</span>
